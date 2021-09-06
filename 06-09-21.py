@@ -11,29 +11,34 @@ import pandas as pd
 ## loop through with integer iterator, check if file with that id exists, if it does, paste as array to array
 # each file is a bunch of rows, put second value as array elements per file
 ## normal first
-filepath = "Data/ecg/normal/801_"
-normals = []
-for it in range(0, 100000):
-    heartbeat = []
-    fileArray = []
-    it_as_string = str(it)
-    if (len(it_as_string)<6):
-        while(len(it_as_string)<6):
-            it_as_string = "0"+it_as_string
-    for fileExt in [".0",".1"]:
-        if os.path.isfile(filepath+it_as_string+str(fileExt)):
-            file = open(filepath+it_as_string+str(fileExt))
-            for line_in_file in range(0,50):
-                line_content = file.readline()
-                line_content = line_content.split(" ")
-                line_content = line_content[len(line_content)-1]
-                line_content = line_content.strip()
-                fileArray.append(line_content)
-            file.close()
-            heartbeat.append(fileArray)
-    if len(heartbeat) > 0:
-        #print(heartbeat)
-        normals.append(heartbeat)
+def loadHeartbeatData(folder):
+    array = []
+    filepath = "Data/ecg/"+folder+"/801_"
+    for it in range(0, 100000):
+        heartbeat = []
+        fileArray = []
+        it_as_string = str(it)
+        if (len(it_as_string)<6):
+            while(len(it_as_string)<6):
+                it_as_string = "0"+it_as_string
+        for fileExt in [".0",".1"]:
+            if os.path.isfile(filepath+it_as_string+str(fileExt)):
+                file = open(filepath+it_as_string+str(fileExt))
+                for line_in_file in range(0,50):
+                    line_content = file.readline()
+                    line_content = line_content.split(" ")
+                    line_content = line_content[len(line_content)-1]
+                    line_content = line_content.strip()
+                    fileArray.append(line_content)
+                file.close()
+                heartbeat.append(fileArray)
+        if len(heartbeat) > 0:
+            array.append(heartbeat)
+    return array
+
+normals = loadHeartbeatData("normal")
+abnormals = loadHeartbeatData("abnormal")
+print(len(abnormals))
 exit()
 
 
