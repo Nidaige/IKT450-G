@@ -6,13 +6,8 @@ import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 
-
-
-
-
-
-
-
+#read csv to dataframe
+training_dataset = pd.read_csv("Data/crx-data.csv", header = None)
 #remove column with names (letters)
 training_dataset = training_dataset.drop(training_dataset.columns[0],axis=1).values.tolist()
 print(training_dataset)
