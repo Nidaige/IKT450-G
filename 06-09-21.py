@@ -39,6 +39,7 @@ def loadHeartbeatData(folder):
 normals = loadHeartbeatData("normal")
 abnormals = loadHeartbeatData("abnormal")
 print(len(abnormals))
+print(loadHeartbeatData("normal"))
 exit()
 
 
