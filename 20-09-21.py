@@ -1,3 +1,4 @@
+import os
 import random
 
 import torch
@@ -5,6 +6,50 @@ import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
+from PIL import Image
+
+class CustomDataset(torch.utils.data.Dataset):
+    def __init__(self, root, transforms):
+        self.root = root
+        self.transforms = transforms
+        # load all image files, sorting them to
+        # ensure that they are aligned
+        self.imgsroot = []
+        self.imgs = list(sorted(os.listdir("data/food-11/"+root+"/0")))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/1"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/2"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/3"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/4"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/5"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/6"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/7"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/8"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/9"))))
+        self.imgs.append(list(sorted(os.listdir("data/food-11/"+root+"/10"))))
+        for item in self.imgs:
+            newList = []
+            for img in item:
+                newList.append("data/food-11/"+root+img)
+            self.imgsroot.append(newList)
+        #print(self.imgs)
+
+
+    def __getitem__(self, idx):
+        # load images and masks
+        img_path = self.imgsroot[idx]
+        print(img_path)
+        img = Image.open(img_path).convert("RGB")
+        print(idx)
+        classes = ('Bread    ', 'Dairy    ', 'Dessert  ', 'Egg      ', 'Fried    ', 'Meat     ', 'Pasta    ', 'Rice     ', 'Seafood  ', 'Soup     ', 'Vegetable')
+        return img
+
+
+
+    def __len__(self):
+        return len(self.imgs)
+
 
 def imshow(img,s=""):
     img = img / 2 + 0.5     # unnormalize
@@ -17,25 +62,22 @@ def imshow(img,s=""):
     plt.text(0,-20,s)
     plt.show()
 
-
-
-import torch.nn as nn
-import torch.nn.functional as F
-
 class Net(nn.Module):
     def __init__(self):
         super(Net,self).__init__()
-        self.conv1 = nn.Conv2d(3,6,5)
+        self.conv1 = nn.Conv2d(3,6,(5,5))
         self.pool = nn.MaxPool2d(2,2)
-        self.conv2 = nn.Conv2d(6,16,5)
-        self.fc1 = nn.Linear(16*5*5,120)
+        self.conv2 = nn.Conv2d(6,16,(5,5))
+        self.fc1 = nn.Linear(16*29*29,120)
         self.fc2 = nn.Linear(120,84)
         self.fc3 = nn.Linear(84,11)
 
     def forward(self,x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1,16*5*5)
+        #print(x.shape)
+        #exit()
+        x = x.view(-1,16*29*29)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -44,19 +86,23 @@ class Net(nn.Module):
 def train():
 
     transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Resize((32,32)),
+        [transforms.Resize((128,128)), transforms.ToTensor(),
          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-    trainset = torchvision.datasets.ImageFolder('data/food-11/training', transform=transform)
+    #trainset = torchvision.datasets.ImageFolder('data/food-11/training', transform=transform)
+    trainset = CustomDataset("training",transform)
+
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=16,
-                                              shuffle=True, num_workers=2)
-    testset = torchvision.datasets.ImageFolder('data/food-11/training', transform=transform)
+                                              shuffle=False, num_workers=2)
+    testset = torchvision.datasets.ImageFolder('data/food-11/validation', transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=16,
-                                             shuffle=False, num_workers=2)
+                                             shuffle=True, num_workers=2)
 
     classes = (
-        'Bread', 'Dairy product', 'Dessert', 'Egg', 'Fried food', 'Meat', 'Noodles/Pasta', 'Rice', 'Seafood', 'Soup',
-        'Vegetable/Fruit')
+        'Bread    ', 'Dairy    ', 'Dessert  ', 'Egg      ', 'Fried    ', 'Meat     ', 'Pasta    ', 'Rice     ',
+        'Seafood  ', 'Soup     ',
+        'Vegetable')
+
 
     dataiter = iter(trainloader)
     images, labels = dataiter.next()
