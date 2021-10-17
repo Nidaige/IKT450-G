@@ -221,4 +221,5 @@ if __name__ == '__main__':
     trainset = CustomDataset("train", None)
     testset = CustomDataset("val", None)
     print("main")
+
     main()
