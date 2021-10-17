@@ -1,8 +1,14 @@
 # Baloons assignment
+import json
 import os
-
-import torch
 from PIL.Image import Image
+import torch
+import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision
+import torchvision.transforms as transforms
+
 
 
 class CustomDataset(torch.utils.data.Dataset):
@@ -13,21 +19,26 @@ class CustomDataset(torch.utils.data.Dataset):
         # ensure that they are aligned
         self.classes = torch.tensor([0,1,2,3,4,5,6,7,8,9,10])
         self.imgs = []
+        self.labels = {}
         newimgs = list(sorted(os.listdir("Data/Balloons/balloon/"+root+"/")))
         for i in newimgs:
             b = i.split('.')
             if (b[1] == "jpg") & (len(i) > 0):
                 self.imgs.append("Data/Balloons/balloon/"+root+"/"+str(i))
-        for a in self.imgs:
-            print(a)
-        exit()
-
+        filepath = open("Data/Balloons/balloon/"+root+"/via_region_data.json")
+        file = json.load(filepath)
+        for a in file.keys():
+            for k in self.imgs:
+                item = k.split("/")[-1]
+                if item in k:
+                    self.labels[k]=a
 
     def __getitem__(self, idx):
         # load images and masks
         ImgPath = self.imgs[idx]
+        label = self.labels[ImgPath]
         img = self.transforms(Image.open(ImgPath))
-        return(img)
+        return(img,label)
 
 
 
@@ -36,24 +47,16 @@ class CustomDataset(torch.utils.data.Dataset):
 
 ### Example code ###
 
-import torch
-import torch.optim as optim
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
-import torchvision.transforms as transforms
-import numpy as np
-import matplotlib.pyplot as plt
-
-
 class NaiveResnet(nn.Module):
     def __init__(self, C_in):
+        print("NaiveResnet init")
         super(NaiveResnet, self).__init__()
         self.tower_one = nn.Conv2d(C_in, 3, (1, 1))
         self.tower_two = nn.Conv2d(3, 3, (3, 3), padding=1)
         self.tower_three = nn.Conv2d(3, 3, (5, 5), padding=2)
 
     def forward(self, x):
+        print("NaiveResnet forward")
         stream = self.tower_one(x).clamp(min=0)
         stream = self.tower_two(stream).clamp(min=0)
         stream = self.tower_three(stream).clamp(min=0)
@@ -64,12 +67,14 @@ class NaiveResnet(nn.Module):
 
 class NaiveFireblock(nn.Module):
     def __init__(self, C_in):
+        print("Naivefireblock init")
         super(NaiveFireblock, self).__init__()
         self.squeeze = nn.Conv2d(C_in, 3, (1, 1))
         self.tower_one = nn.Conv2d(3, 3, (1, 1))
         self.tower_two = nn.Conv2d(3, 3, (3, 3), padding=1)
 
     def forward(self, x):
+        print("NaiveResnet forward")
         squeeze = self.squeeze(x).clamp(min=0)
         tower_one_stream = self.tower_one(squeeze).clamp(min=0)
         tower_two_stream = self.tower_two(squeeze).clamp(min=0)
@@ -80,6 +85,7 @@ class NaiveFireblock(nn.Module):
 
 class NaiveInception(nn.Module):
     def __init__(self, C_in, ):
+        print("NaiveInception init")
         super(NaiveInception, self).__init__()
 
         self.tower_one_1 = nn.Conv2d(C_in, 6, (3, 3), padding=1)
@@ -92,6 +98,7 @@ class NaiveInception(nn.Module):
         self.tower_three_2 = nn.Conv2d(6, 6, (1, 1))
 
     def forward(self, x):
+        print("NaiveResnet forward")
         tower_one_stream = self.tower_one_1(x).clamp(min=0)
         tower_one_stream = self.tower_one_2(tower_one_stream).clamp(min=0)
 
@@ -107,6 +114,7 @@ class NaiveInception(nn.Module):
 
 class Net(nn.Module):
     def __init__(self):
+        print("net init")
         super(Net, self).__init__()
         # self.res = NaiveResnet(3)
         self.res = NaiveInception(3)
@@ -118,6 +126,7 @@ class Net(nn.Module):
         self.fc_3 = nn.Linear(64, 10)
 
     def forward(self, x):
+        print("net forward")
         stream = self.res(x)
         # stream = self.conv(x)
         stream = torch.flatten(stream, start_dim=1)
@@ -131,6 +140,7 @@ class Net(nn.Module):
 
 
 def train(model, device, train_loader, optimizer, epoch):
+    print("train")
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
@@ -145,7 +155,8 @@ def train(model, device, train_loader, optimizer, epoch):
                 epoch, 100. * batch_idx / len(train_loader), loss.item()))
 
 
-def test(model, device, test_loader):
+def test1(model, device, test_loader):
+    print("test")
     model.eval()
     test_loss = 0
     correct = 0
@@ -191,8 +202,8 @@ def main():
     ])
 
     # Import / download CIFAR dataset
-    trainset = torchvision.datasets.CIFAR10(root=data_dir, train=True, download=True, transform=data_transform)
-    testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=data_transform)
+    #trainset = torchvision.datasets.CIFAR10(root=data_dir, train=True, download=True, transform=data_transform)
+    #testset = torchvision.datasets.CIFAR10(root=data_dir, train=False, download=True, transform=data_transform)
 
     train_loader = torch.utils.data.DataLoader(trainset, **data_loader_args)
     test_loader = torch.utils.data.DataLoader(testset, **data_loader_args)
@@ -202,9 +213,12 @@ def main():
 
     for epoch in range(1, EPOCHS + 1):
         train(model, device, train_loader, optimizer, epoch)
-        test(model, device, test_loader)
+        test1(model, device, test_loader)
 
 
 if __name__ == '__main__':
-    exit()
+    print("dataloader")
+    trainset = CustomDataset("train", None)
+    testset = CustomDataset("val", None)
+    print("main")
     main()
