@@ -1,7 +1,7 @@
 # Baloons assignment
 import json
 import os
-from PIL.Image import Image
+from PIL import Image
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -15,9 +15,6 @@ class CustomDataset(torch.utils.data.Dataset):
     def __init__(self, root, transformers):
         self.root = root
         self.transforms = transformers
-        # load all image files, sorting them to
-        # ensure that they are aligned
-        self.classes = torch.tensor([0,1,2,3,4,5,6,7,8,9,10])
         self.imgs = []
         self.labels = {}
         newimgs = list(sorted(os.listdir("Data/Balloons/balloon/"+root+"/")))
@@ -26,19 +23,28 @@ class CustomDataset(torch.utils.data.Dataset):
             if (b[1] == "jpg") & (len(i) > 0):
                 self.imgs.append("Data/Balloons/balloon/"+root+"/"+str(i))
         filepath = open("Data/Balloons/balloon/"+root+"/via_region_data.json")
-        file = json.load(filepath)
-        for a in file.keys():
-            for k in self.imgs:
-                item = k.split("/")[-1]
-                if item in k:
-                    self.labels[k]=a
+        file = json.load(filepath) # returns dict of json info
+        for a in file.keys(): # for each key of the dict
+            for k in self.imgs: # for each image
+                item = k.split("/")[-1] # get final part of image path
+                if item in a:
+                    arr = [] # array to hold sets of pairs of xy
+                    for c in range(len(file[a]['regions'])):
+                        arrayo = []
+                        this_x = (file[a]['regions'][str(c)]['shape_attributes']['all_points_x'])
+                        this_y = (file[a]['regions'][str(c)]['shape_attributes']['all_points_y'])
+                        for b in range(len(this_x)):
+                            arrayo.append([this_x[b],this_y[b]])
+                        arr.append(arrayo)
+                    self.labels[k]=arr
+        print(self.labels[self.imgs[0]][0][0])
 
     def __getitem__(self, idx):
         # load images and masks
         ImgPath = self.imgs[idx]
-        label = self.labels[ImgPath]
-        img = self.transforms(Image.open(ImgPath))
-        return(img,label)
+        all_labels = self.labels[ImgPath]
+        img = self.transforms(Image.open(ImgPath,"r"))
+        return(img)
 
 
 
