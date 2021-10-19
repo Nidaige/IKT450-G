@@ -17,27 +17,19 @@ class CustomDataset(torch.utils.data.Dataset):
         self.transforms = transformers
         self.imgs = []
         self.labels = {}
-        newimgs = list(sorted(os.listdir("Data/Balloons/balloon/"+root+"/")))
-        for i in newimgs:
-            b = i.split('.')
-            if (b[1] == "jpg") & (len(i) > 0):
-                self.imgs.append("Data/Balloons/balloon/"+root+"/"+str(i))
         filepath = open("Data/Balloons/balloon/"+root+"/via_region_data.json")
         file = json.load(filepath) # returns dict of json info
-        for a in file.keys(): # for each key of the dict
-            for k in self.imgs: # for each image
-                item = k.split("/")[-1] # get final part of image path
-                if item in a:
-                    arr = [] # array to hold sets of pairs of xy
-                    for c in range(len(file[a]['regions'])):
-                        arrayo = []
-                        this_x = (file[a]['regions'][str(c)]['shape_attributes']['all_points_x'])
-                        this_y = (file[a]['regions'][str(c)]['shape_attributes']['all_points_y'])
-                        for b in range(len(this_x)):
-                            arrayo.append([this_x[b],this_y[b]])
-                        arr.append(arrayo)
-                    self.labels[k]=arr
-        print(self.labels[self.imgs[0]][0][0])
+        jsondata = list(file.values())
+        imgdata = [img for img in jsondata if img['regions']]
+        for img in imgdata:
+            self.imgs.append("Data/Balloons/balloon/"+root+img["filename"])
+        for img in imgdata:
+            # array per image with separate dict for each region
+            polygons = [region['shape_attributes'] for region in img['regions'].values()]
+            print(polygons)
+        exit()
+
+
 
     def __getitem__(self, idx):
         # load images and masks
