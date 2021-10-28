@@ -22,12 +22,27 @@ class CustomDataset(torch.utils.data.Dataset):
         jsondata = list(file.values())
         imgdata = [img for img in jsondata if img['regions']]
         for img in imgdata:
-            self.imgs.append("Data/Balloons/balloon/"+root+img["filename"])
-        for img in imgdata:
+            path = "Data/Balloons/balloon/"+root+img["filename"]
+            self.imgs.append(path)
             # array per image with separate dict for each region
             polygons = [region['shape_attributes'] for region in img['regions'].values()]
-            print(polygons)
+            self.labels[path]=polygons
+        print(self.labels.keys())
         exit()
+
+
+        # { 'filename': '28503151_5b5b7ec140_b.jpg',
+        #   'regions': {
+        #       '0': {
+        #           'region_attributes': {},
+        #           'shape_attributes': {
+        #               'all_points_x': [...],
+        #               'all_points_y': [...],
+        #               'name': 'polygon'}},
+        #       ... more regions ...
+        #   },
+        #   'size': 100202
+        # }
 
 
 
