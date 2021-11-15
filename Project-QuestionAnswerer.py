@@ -29,3 +29,18 @@ About the data:
 How data is represented:
     -
 '''
+
+# Imports
+from transformers import BertTokenizer, BertModel
+
+# What is a tokenizer?
+tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+
+model = BertModel.from_pretrained("bert-base-cased")
+
+# Get input data
+text = "Replace me by any text you'd like."
+
+encoded_input = tokenizer(text, return_tensors='pt')
+
+output = model(**encoded_input)
