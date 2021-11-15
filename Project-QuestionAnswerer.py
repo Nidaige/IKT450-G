@@ -1,24 +1,26 @@
-''' Project description
-Full description from canvas:
-    Task: Questioning answering
-    Data: https://paperswithcode.com/dataset/natural-questions
-    Start with yes/no, continue with complex answers
+import jsonlines as jsonlines
 
-About the data:
-    - 42 GB in size - Really F*ing large! Is downloading the best option? or is there a way to fetch from code?
 
-    - The Natural Questions corpus is a question answering dataset containing 307,373 training examples,
-    7,830 development examples, and 7,842 test examples.
+class NQDataLoader():  # Data loader class for Natural Questions
+    def __init__(self):
+        self.yesNoQuestions = {}  # Holds all objects with yes-no-answer
+        with jsonlines.open('Data/Project/v1.0-simplified_nq-dev-all.jsonl') as reader:  # open file
+            Id = 0
+            for obj in reader:
+                if obj["annotations"][-1]["yes_no_answer"] != "NONE":  # If the question has a yes/no-answer
+                    self.yesNoQuestions[Id] = (obj)  # Add it to the dict
+                    Id += 1  # Increment ID
+                    if Id == 20:  # stop after 20 questions are found, remove when model works
+                        break
 
-    - Each example is comprised of a google.com query and a corresponding Wikipedia page.
+    def __getitem__(self, idx):
+        return self.yesNoQuestions[idx]
 
-    - Each Wikipedia page has a passage (or long answer) annotated on the page that answers the question and one or more
-    short spans from the annotated passage containing the actual answer.
+    def __len__(self):
+        return(len(self.yesNoQuestions))
 
-    - The long and the short answer annotations can however be empty.
 
-    - If they are both empty, then there is no answer on the page at all.
-
+'''
     - If the long answer annotation is non-empty, but the short answer annotation is empty, then the annotated passage
     answers the question but no  explicit short answer could be found.
 
@@ -30,17 +32,9 @@ How data is represented:
     -
 '''
 
-# Imports
-from transformers import BertTokenizer, BertModel
-
-# What is a tokenizer?
-tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
-
-model = BertModel.from_pretrained("bert-base-cased")
-
-# Get input data
-text = "Replace me by any text you'd like."
-
-encoded_input = tokenizer(text, return_tensors='pt')
-
-output = model(**encoded_input)
+NQDataset = NQDataLoader()
+for i in range(10):
+    data_item = NQDataset.__getitem__(i)
+    print("Question: ",data_item["question_text"])
+    print("Answer: ",data_item["annotations"][-1]["yes_no_answer"])
+    print("-----")
