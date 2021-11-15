@@ -22,4 +22,8 @@ class NQDataLoader():  # Data loader class for Natural Questions
 
 
 NQDataset = NQDataLoader()
-print(NQDataset.__getitem__(11)["annotations"][-1]["yes_no_answer"])
+for i in range(10):
+    data_item = NQDataset.__getitem__(i)
+    print("Question: ",data_item["question_text"])
+    print("Answer: ",data_item["annotations"][-1]["yes_no_answer"])
+    print("-----")
