@@ -1,5 +1,6 @@
 import jsonlines as jsonlines
-
+import torch
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
 
 class NQDataLoader():  # Data loader class for Natural Questions
     def __init__(self):
@@ -19,22 +20,55 @@ class NQDataLoader():  # Data loader class for Natural Questions
     def __len__(self):
         return(len(self.yesNoQuestions))
 
+    def getValuesForKeys(self):
+        vals = []
+        for a in self.yesNoQuestions:
+            value = []
+            for b in a.keys():
+                print(b)
+                print(a[b])
+            exit()
+
+
+def get20Questions():
+    NQDataset = NQDataLoader()
+    print(NQDataset[0].keys())
+    questions = []
+    for i in range(10):
+        questions.append([NQDataset[i]["question_text"], NQDataset[i]["document_html"]])
+    return questions
+
+
+
 
 '''
-    - If the long answer annotation is non-empty, but the short answer annotation is empty, then the annotated passage
-    answers the question but no  explicit short answer could be found.
-
-    - Finally 1% of the documents have a passage annotated with a short answer that is “yes” or “no”,
-    instead of a list of short spans.
-
-
-How data is represented:
-    -
-'''
-
 NQDataset = NQDataLoader()
 for i in range(10):
     data_item = NQDataset.__getitem__(i)
     print("Question: ",data_item["question_text"])
     print("Answer: ",data_item["annotations"][-1]["yes_no_answer"])
-    print("-----")
+    print("-----")'''
+
+
+
+def run():
+    torch.multiprocessing.freeze_support()
+    NQDataset = NQDataLoader()
+    NQDatasetValues = NQDataset.getValuesForKeys()
+    for NQDatasetValue in NQDatasetValues:
+        print("-----")
+        for a in NQDatasetValue:
+            print(NQDatasetValue,a)
+    exit()
+
+    from transformers import pipeline
+
+    nlp = pipeline("question-answering", model=AutoModelForQuestionAnswering.from_pretrained("bert-based-cased"), tokenizer=AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad"))
+    questions = get20Questions()
+    for question in questions:
+        query = question[0]
+        context = question[1]
+        print(query, nlp(question=query, context=context))
+
+if __name__ == '__main__':
+    run()
