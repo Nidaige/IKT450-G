@@ -5,9 +5,9 @@ from transformers import AutoTokenizer, AutoModelForQuestionAnswering, BertToken
 
 
 class NQDataLoader():  # Data loader class for Natural Questions
-    def __init__(self):
+    def __init__(self,path):
         self.yesNoQuestions = []  # Holds all objects with yes-no-answer
-        with jsonlines.open('Data/Project/simplified-nq-train.jsonl') as reader:  # open file
+        with jsonlines.open(path) as reader:  # open file
             Id = 0
             for obj in reader:
                 if obj["annotations"][-1]["yes_no_answer"] == "NONE":  # If the question has a yes/no-answer
@@ -50,7 +50,7 @@ def run():
     ''' Used snippets from     # https://huggingface.co/transformers/training.html - fine tuning a pretrained model '''
     
     torch.multiprocessing.freeze_support()
-    NQDataset = NQDataLoader()
+    NQDataset = NQDataLoader("Data/Project/First20.jsonl")
     data = NQDataset[0]
     print("keys", data.keys())
 
@@ -85,8 +85,6 @@ def run():
             optimizer.zero_grad()
             progress_bar.update(1)
 
-
-
     nlp = pipeline("question-answering", model=model, tokenizer = BertTokenizer.from_pretrained('bert-base-cased'))
     questions = get20Questions()
     for question in questions:
@@ -94,5 +92,14 @@ def run():
         context = question[1]
         print(query, nlp(question=query, context=context))
 
+def getQuestionsToNewFile():
+    questions = NQDataLoader()
+    with jsonlines.open('Data/Project/First20.jsonl', mode='w') as writer:
+        for a in questions.yesNoQuestions:
+            writer.write(a)
+    exit()
+
+
 if __name__ == '__main__':
+    #getQuestionsToNewFile()
     run()
