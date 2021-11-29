@@ -1,4 +1,5 @@
 import jsonlines as jsonlines
+import numpy
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering, BertTokenizer, AdamW, get_scheduler, pipeline
@@ -51,9 +52,29 @@ def run():
     
     torch.multiprocessing.freeze_support()
     NQDataset = NQDataLoader("Data/Project/First20.jsonl")
-    data = NQDataset[0]
-    print("keys", data.keys())
-
+    list_of_tensors = []
+    for question in NQDataset:
+        data = question
+        tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        tokenized_data = tokenizer.tokenize(data["document_text"])
+        tokenized_question = tokenizer.tokenize(data["question_text"])
+        tokenized_answer = tokenizer.tokenize(data[""])
+        print("keys", data.keys())
+        vocabulary = mapQuestionsToIndices(tokenized_data,[])
+        vocabulary = mapQuestionsToIndices(tokenized_question,vocabulary)
+        print(vocabulary)
+        data_as_list_of_indices = []
+        question_as_list_of_indices = []
+        for word in tokenized_data:
+            data_as_list_of_indices.append(vocabulary.index(word))
+        for question_word in tokenized_question:
+            question_as_list_of_indices.append(vocabulary.index(question_word))
+        print(data_as_list_of_indices)
+        data_as_nparray = numpy.ndarray(data_as_list_of_indices)
+        question_as_nparray = numpy.ndarray(question_as_list_of_indices)
+        data_as_tensor = torch.tensor(data_as_nparray)
+        question_as_tensor = torch.tensor(question_as_nparray)
+        list_of_tensors.append([data_as_tensor,question_as_tensor])
     # define pre-trained model
     model = AutoModelForQuestionAnswering.from_pretrained("bert-base-cased")
     # define optimizer (AdamW is default for bert)
@@ -77,6 +98,7 @@ def run():
     for epoch in range(num_epochs):
         for batch in NQDataset:
             batch = {k: v.to(device) for k, v in batch.items()} # this line causes crash, figure out = $$$
+            # probably because it's not a tensor
             outputs = model(**batch)
             loss = outputs.loss
             loss.backward()
@@ -99,6 +121,12 @@ def getQuestionsToNewFile():
             writer.write(a)
     exit()
 
+def mapQuestionsToIndices(tokenized, oldvocab):
+    vocab = oldvocab
+    for word in tokenized:
+        if word not in vocab:
+            vocab.append(word)
+    return vocab
 
 if __name__ == '__main__':
     #getQuestionsToNewFile()
