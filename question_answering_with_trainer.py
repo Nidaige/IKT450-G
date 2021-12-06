@@ -7,6 +7,7 @@ import numpy
 import torch
 from transformers import AutoModelForQuestionAnswering, TrainingArguments, Trainer, BertTokenizer, BertModel, AdamW, \
     get_scheduler, pipeline
+from new_data_loading import *
 
 
 class NQDataLoader():  # Data loader class for Natural Questions
@@ -18,7 +19,7 @@ class NQDataLoader():  # Data loader class for Natural Questions
                 if obj["annotations"][-1]["yes_no_answer"] == "NONE":  # If the question has a yes/no-answer
                     self.yesNoQuestions.append(obj)  # Add it to the dict
                     Id += 1  # Increment ID
-                    if Id == 100:  # stop after 20 questions are found, remove when model works
+                    if Id == 20:  # stop after 20 questions are found, remove when model works
                         break
 
     ''' Train Dataset format
@@ -71,7 +72,7 @@ def mapQuestionsToIndices(tokenized, oldvocab):
 def run():
     tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
     torch.multiprocessing.freeze_support()
-    NQDataset = NQDataLoader("Data/Project/simplified-nq-train.jsonl")
+    NQDataset = NQDataLoader("Data/Project/First20.jsonl")
     list_of_tensors = []
     input_ids = []
     input_id = 0
@@ -81,6 +82,10 @@ def run():
         c+=1
         # Tokenize context (the wikipedia text), question and answer candidates (List of each element/word etc.)
         tokenized_data = question["document_text"].split(" ")
+        tokenized_data_2 = tokenizer.tokenize(question["document_text"])
+        print("split",tokenized_data)
+        print("auto",tokenized_data_2)
+        exit()
         tokenized_question = question["question_text"].split(" ")
         if len(tokenized_question) < 30:  # if less than 480 tokens, populate with 0's
             while len(tokenized_question) < 30:
@@ -144,8 +149,10 @@ def run():
         # convert from list to numpy array
             final_list_of_indices_as_nparray = numpy.array(data_as_list_of_indices + question_as_list_of_indices)
             # convert from numpy array to tensors
-            #list_of_tensors.append((torch.tensor(final_list_of_indices_as_nparray),answer_as_list_of_indices))
-            list_of_tensors.append({"outputs":final_list_of_indices_as_nparray, "labels":answer_as_list_of_indices})
+            list_of_tensors.append((torch.tensor(final_list_of_indices_as_nparray),answer_as_list_of_indices))
+            '''print(torch.tensor(final_list_of_indices_as_nparray),answer_as_list_of_indices)
+            exit()'''
+            #list_of_tensors.append({"outputs":final_list_of_indices_as_nparray, "labels":answer_as_list_of_indices})
         # join the tensors together as a single object to feed to the model
     # define pre-trained model
 
@@ -175,12 +182,12 @@ def run():
 
 
     trainset = shuffled_dataset[0:int(0.7*len(shuffled_dataset))]
-    testset = shuffled_dataset[int(0.7*len(shuffled_dataset)):-1]
-
-
+    testset = shuffled_dataset[int(0.7*len(shuffled_dataset)):]
 
     '''trainloader = torch.utils.data.DataLoader(trainset, batch_size=16, shuffle=True, num_workers=2)
     testloader = torch.utils.data.DataLoader(testset, batch_size=16, shuffle=True, num_workers=2)'''
+
+
     trainer = Trainer(
         model=model,
         args=training_args,
