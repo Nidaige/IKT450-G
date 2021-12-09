@@ -1,4 +1,5 @@
 ### Imports ###
+import os
 from random import shuffle, random
 import numpy as np
 from datasets import load_metric, tqdm
@@ -8,9 +9,11 @@ from torch.autograd.grad_mode import F
 from transformers import AutoModelForQuestionAnswering, TrainingArguments, Trainer, pipeline, BertForQuestionAnswering
 from transformers.pipelines.base import collate_fn
 import torch
+from torch import tensor as tensor
 import itertools
 import more_itertools as it
 from transformers import BertTokenizer
+
 
 class NQDataLoader():  # Data loader class for Natural Questions
     def __init__(self,path, count):
@@ -21,7 +24,8 @@ class NQDataLoader():  # Data loader class for Natural Questions
                 if obj["annotations"][-1]["yes_no_answer"] == "NONE":  # If the question has a yes/no-answer
                     self.yesNoQuestions.append(obj)  # Add it to the dict
                     Id += 1  # Increment ID
-                    if Id == count:  # stop after 20 questions are found, remove when model works
+                    print("Reading question: ", Id)
+                    if Id == count & count!=0:  # stop after 20 questions are found, remove when model works
                         break
 
     ''' Train Dataset format
@@ -88,20 +92,23 @@ def slice_data(data, window_size, stride, tokenizer):
         tok_sample = ' <SEP> '.join([question, window])
         # tokenize. truncate and pad if necessary
         tok_sample = tokenizer(tok_sample, padding=True, truncation=True, return_tensors='pt')
+        for key in ["input_ids", "token_type_ids", "attention_mask"]:
+            tok_sample[key] = tok_sample[key].squeeze()
         tok_list.append(tok_sample)
 
         # Shift start and end token labels to window
         shifted_start_label = int(start_label - i*stride)
         shifted_end_label = int(end_label - i*stride)
         if shifted_start_label < 0 or shifted_start_label >= window_size:
-            label = torch.Tensor([-1, -1])
+            label = torch.Tensor([-1, -1]).to(torch.long)
         elif shifted_end_label <= 0 or shifted_end_label > window_size:
-            label = torch.Tensor([-1,-1])
+            label = torch.Tensor([-1,-1]).to(torch.long)
         else:
-            label = torch.Tensor([shifted_start_label, shifted_end_label])
+            label = torch.Tensor([shifted_start_label, shifted_end_label]).to(torch.long)
 
         label_list.append(label)
         i += 1
+
     return tok_list, label_list
 
 def preprocess_data(path, count):
@@ -109,93 +116,113 @@ def preprocess_data(path, count):
     torch.multiprocessing.freeze_support()
     NQDataset = NQDataLoader(path,count)
     sliced_dataset = []
+    j = 0
     for question in NQDataset:
+        j+=1
+        print("Pre-processing question ",j)
         x, y = slice_data(question, 512, 128, tokenizer)
         assert (len(x) == len(y)), "You must have as many labels as input samples"
         for i in range(len(y)):
             sliced_dataset.append((x[i], y[i]))
     return sliced_dataset
 
+
+# writes the dataset to a file to skip the pre-processing on subsequent runs
+def write_processed_data_to_new_file(source_filepath, destination_filepath, question_count, shuffled, overwrite):
+    if not os.path.exists(source_filepath):
+        exit(1)
+    if os.path.exists(destination_filepath) and not overwrite:
+        return
+    dataset = preprocess_data(source_filepath, question_count)
+    k = 0
+    if shuffled:
+        list_of_indices = []
+        shuffled_dataset = []
+
+        for l in range(len(dataset)):
+            list_of_indices.append(l)
+        shuffle(list_of_indices)
+        for index in list_of_indices:
+            shuffled_dataset.append(dataset[index])
+        with jsonlines.open(destination_filepath, mode='w') as writer:
+            for a in shuffled_dataset:
+                k+=1
+                print("Writing question ",k)
+                writer.write(str(vars(dataObject(a[0],a[1]))))
+    else:
+        with jsonlines.open(destination_filepath, mode='w') as writer:
+            for a in dataset:
+                k+=1
+                print("Writing question ", k)
+                writer.write(str(vars(dataObject(a[0],a[1]))))
+    return
+
+
+
 class dataObject():  # object-version of each data element. Prevent the vars-function in data_collator.py from throwing error
     def __init__(self, x_dict, y_labels):
         self.input_ids = x_dict["input_ids"]
         self.token_type_ids = x_dict["token_type_ids"]
         self.attention_mask = x_dict["attention_mask"]
-        self.label = y_labels  # throws error surrounding length of label tensor not being 1
+        self.start_positions = y_labels[0]
+        self.end_positions = y_labels[1]
+        #self.label = y_labels  # throws error surrounding length of label tensor not being 1
         # self.label = (y_labels[0],y_labels[1])  # throws error surrounding "labels" in batch in forward function
         # self.label_ids = y_labels  # throws error surrounding "labels" in batch in forward function
         # having no label throws error around "too many values to unpack", refers to tuple not containing label.
+
+class load_dataset(torch.utils.data.Dataset):
+    def __init__(self, path):
+        self.dataset = []
+        with jsonlines.open(path) as reader:  # open file
+            for obj in reader:  # balance numbers of positive and null samples
+                item = eval(obj)  # could use same negative samples
+                self.dataset.append(item)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, item):
+        return self.dataset[item]
 
 ### Initializing ###
 def run():
     ''' Initialization '''
     torch.multiprocessing.freeze_support()
 
+
+
     ''' Loading Dataset'''
-    NQDataset = preprocess_data("Data/Project/First20.jsonl", 20)
-
-    ''' Shuffling data'''
-    list_of_indices = []
-    shuffled_dataset = []
-    for l in range(len(NQDataset)):
-        list_of_indices.append(l)
-    shuffle(list_of_indices)
-    for index in list_of_indices:
-        shuffled_dataset.append(NQDataset[index])
-
-    ''' Splitting data into training and testing sets'''
-    trainset_as_tuples = shuffled_dataset[0:int(0.7*len(shuffled_dataset))]
-    testset_as_tuples = shuffled_dataset[int(0.7*len(shuffled_dataset)):]  # only useable when trainer works
-
-    ''' Convert tupled data items into objects for the vars-function in data_collator'''
-    trainset = []
-    for item in trainset_as_tuples:
-        trainset.append(dataObject(item[0],item[1]))
-    testset = []
-    for item in testset_as_tuples:
-        testset.append(dataObject(item[0], item[1]))
-
-
+    Raw_filepath = "Data/Project/simplified-nq-train.jsonl"
+    Dataset_filepath = "Data/Project/nq-train-fast-read.jsonl"
+    #Dataset_filepath = "Data/Project/Fast-read.jsonl"
+    write_processed_data_to_new_file(source_filepath=Raw_filepath, destination_filepath=Dataset_filepath,question_count=200, shuffled=True, overwrite = False)
+    NQDataset = load_dataset(Dataset_filepath)
+    # run dataloader once, read lines by id, load as torch dataset
     ''' Initialize model params and Trainer class'''
     model = BertForQuestionAnswering.from_pretrained('bert-base-cased')
-    #model = AutoModelForQuestionAnswering('bert-base-cased')
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print("Cuda available: ",torch.cuda.is_available())
+    print("Cuda version: ",torch.version.cuda)
+    model.to(device)
 
-    training_args = TrainingArguments('test_trainer')
+    training_args = TrainingArguments('test_trainer', per_device_train_batch_size=1, per_device_eval_batch_size=1, prediction_loss_only=True)
+    # if loss does not decrease, imbalance between positive and negative examples might be the cause - balance in load
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=trainset,
-        eval_dataset=testset,
+        train_dataset=NQDataset,
+        eval_dataset=NQDataset,
         compute_metrics=compute_metrics)
 
     ''' Run finetuning '''
     trainer.train()
     trainer.evaluate()
+    #print(len(trainer.predict(NQDataset)))
 
-    ''' Set up pipeline for question answering, using newly trained model and bert's autotokenizer'''
-    nlp = pipeline("question-answering", model=model, tokenizer = BertTokenizer.from_pretrained('bert-base-cased'))
 
-    ''' Get Questions from file '''
-    questions = []
-    with jsonlines.open("Data/Project/First20.jsonl") as reader:  # open file
-        for obj in reader:
-            questions.append((obj["question_text"], obj["document_text"], obj["annotations"][-1]["long_answer"]))
 
-    ''' get context, question and answer for test questions'''
-    for question in questions:
-        query = question[0]
-        context = question[1]
-        answer_tokens = question[2]
-        #tokenized_context = BertTokenizer.from_pretrained('bert-base-cased').tokenize(context)  # messes up answer format
-        tokenized_context = context.split(" ")
-        pre_answer = tokenized_context[answer_tokens["start_token"]:answer_tokens["end_token"]]
-        answer=""
-        ''' Print out question, prediction from pipeline and answer from dataset(if any)'''
-        for a in pre_answer:
-            answer+=a+" "
-        print("Question:",query)
-        print("Prediction: ",nlp(question=query, context=context)["answer"])
-        print("Truth:", answer)
+
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
