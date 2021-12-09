@@ -7,7 +7,7 @@ import torch.optim as optim
 import pandas as pd
 
 #read csv to dataframe
-training_dataset = pd.read_csv("Data/crx-data.csv", header = None)
+training_dataset = pd.read_csv("Data/ecolo-data-onlyimcp.csv", header = None)
 #remove column with names (letters)
 training_dataset = training_dataset.drop(training_dataset.columns[0],axis=1).values.tolist()
 print(training_dataset)
@@ -19,6 +19,7 @@ for a in training_dataset:
         a[7]=1
 
 #print(training_dataset)
+
 X = torch.Tensor([i[0:6] for i in training_dataset])
 Y = torch.Tensor([i[7] for i in training_dataset])
 
@@ -62,6 +63,7 @@ import pdb;pdb.set_trace()
 import matplotlib.pyplot as plt
 plt.plot(allloss)
 plt.show()
+print(allloss[-1])
 
 print(list(model.parameters()))
 
