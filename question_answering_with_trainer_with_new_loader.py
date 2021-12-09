@@ -1,16 +1,12 @@
 ### Imports ###
 import os
-from random import shuffle, random
+from random import shuffle
 import numpy as np
-from datasets import load_metric, tqdm
+from datasets import load_metric
 import jsonlines as jsonlines
-from torch import nn
-from torch.autograd.grad_mode import F
-from transformers import AutoModelForQuestionAnswering, TrainingArguments, Trainer, pipeline, BertForQuestionAnswering
-from transformers.pipelines.base import collate_fn
+from transformers import TrainingArguments, Trainer, BertForQuestionAnswering
 import torch
 from torch import tensor as tensor
-import itertools
 import more_itertools as it
 from transformers import BertTokenizer
 
@@ -194,9 +190,9 @@ def run():
 
     ''' Loading Dataset'''
     Raw_filepath = "Data/Project/simplified-nq-train.jsonl"
-    Dataset_filepath = "Data/Project/nq-train-fast-read.jsonl"
-    #Dataset_filepath = "Data/Project/Fast-read.jsonl"
-    write_processed_data_to_new_file(source_filepath=Raw_filepath, destination_filepath=Dataset_filepath,question_count=200, shuffled=True, overwrite = False)
+    #Dataset_filepath = "Data/Project/nq-train-fast-read.jsonl"
+    Dataset_filepath = "Data/Project/Fast-read.jsonl"
+    #write_processed_data_to_new_file(source_filepath=Raw_filepath, destination_filepath=Dataset_filepath,question_count=200, shuffled=True, overwrite = False)
     NQDataset = load_dataset(Dataset_filepath)
     # run dataloader once, read lines by id, load as torch dataset
     ''' Initialize model params and Trainer class'''
@@ -206,19 +202,19 @@ def run():
     print("Cuda version: ",torch.version.cuda)
     model.to(device)
 
-    training_args = TrainingArguments('test_trainer', per_device_train_batch_size=1, per_device_eval_batch_size=1, prediction_loss_only=True)
-    # if loss does not decrease, imbalance between positive and negative examples might be the cause - balance in load
+    training_args = TrainingArguments('test_trainer', per_device_train_batch_size=1, per_device_eval_batch_size=1)#, prediction_loss_only=False)
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=NQDataset,
-        eval_dataset=NQDataset,
-        compute_metrics=compute_metrics)
+        train_dataset=NQDataset[0:int(0.7*len(NQDataset))],
+        eval_dataset=NQDataset[int(0.7*len(NQDataset)):],
+        compute_metrics=compute_metrics,
+        tokenizer=None
+    )
 
     ''' Run finetuning '''
     trainer.train()
     trainer.evaluate()
-    #print(len(trainer.predict(NQDataset)))
 
 
 
@@ -228,6 +224,30 @@ def compute_metrics(eval_pred):
     logits, labels = eval_pred
     metric = load_metric('accuracy')
     predictions = np.argmax(logits, axis=-1)
+    TP = 0  # True positive - % of prediction that falls inside label
+    FP = 0  # False positive - % of prediction that falls outside of label
+    FN = 0  # False negative - % of label that is not in prediction
+    for prediction_index in range(len(predictions[0])):
+        pred_max = max(predictions[0][prediction_index],predictions[1][prediction_index])
+        pred_min = min(predictions[0][prediction_index], predictions[1][prediction_index])
+        pred_len = pred_max-pred_min
+        label_min = labels[0][prediction_index]
+        label_max = labels[1][prediction_index]
+        label_len = label_max-label_min
+        if (label_min == -1 and not pred_min == -1) or (label_max == -1 and not pred_max == -1) or (pred_min == -1 and not label_min == -1) or (pred_max == -1 and not label_max == -1):
+            FP += 1
+            FN += 1
+        else:
+            FN += (max(label_min,min(label_max,pred_min))-label_min + label_max-min(label_max,max(pred_max,label_min)))/label_len
+            TP += (max(label_min,min(label_max,pred_max))-label_min)/pred_len
+            FP += (max(pred_min,label_min)-pred_min + max(pred_max,label_max)-label_max)/pred_len
+    Precision = TP/(TP+FP)
+    Recall = TP/(TP+FN)
+    F1 = (2*TP)/(2*TP+FP+FN)
+    print("Precision: ",Precision)
+    print("Recall: ",Recall)
+    print("f1: ",F1)
+    exit()
     return metric.compute(predictions=predictions, references=labels)
 
 if __name__ == '__main__':
